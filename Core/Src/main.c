@@ -38,6 +38,16 @@
 
 #define DAC_CR (*(volatile uint32_t *) (0x40007400 + 0x00UL))
 #define DAC_DHR12R1 (*(volatile uint32_t *) (0x40007400 + 0x08UL))
+
+
+#define ADC_MIN		500U ///////// check this val
+#define ADC_MAX		3500U /////
+#define STAGE_SPAN      ((ADC_MAX - ADC_MIN) / 3U) // 1000 counts per third
+#define PWM_LOWER_BOUND (ADC_MIN + STAGE_SPAN)          // 1500
+#define PWM_UPPER_BOUND (ADC_MIN + 2U * STAGE_SPAN)     // 2500
+#define PWM_MAX_VAL		999U
+
+#define TESTING 1 /// If 1, use DAC. If 0, assume photoresistor is in circuit
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,7 +64,12 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
+volatile uint32_t adc_val = 0;
+volatile uint32_t duty_red = 0;
+volatile uint32_t duty_green = 0;
+volatile uint32_t duty_blue = 0;
 
+volatile uint32_t dac_val = 500;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -90,22 +105,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  // EOC interrupt
-  ADC1_CR1 |= (1U << 5);
-
-  // Timer
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
-
-  HAL_TIM_Base_Start(&htim2);
-
-  // ADC
-  HAL_ADC_Start_IT(&hadc1);
-
-
-  // DAC
-  DAC_CR |= (1U << 0);
 
   /* USER CODE END Init */
 
@@ -124,6 +123,20 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
+  // ADC EOC interrupt: ADC1_CR1 |= (1U << 5);
+  HAL_ADC_Start_IT(&hadc1);
+
+  // Timer
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
+
+  HAL_TIM_Base_Start(&htim2);
+
+  // DAC start
+  HAL_DAC_Start(&hdac, DAC_CHANNEL_1); // DAC_CR |= (1U << 0);
+  HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_val);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -131,8 +144,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
+	__WFI();
   }
   /* USER CODE END 3 */
 }
@@ -416,40 +429,57 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
-	uint32_t adc_val = HAL_ADC_GetValue(adc); // (2^12)-1==4065 possible values
-	if (adc_val < PWM_LOWER_BOUND) { // low bright
-		//set LED1 (red) to proper percentage between 0 and 999 that is percentage of the first 1/3 of brightness max
-		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, duty1);
+uint32_t PWM_duty_correction(uint32_t val, uint32_t stage_min, uint32_t stage_max) {
+	// Gamma correction. Normalizes first to accommodate the different ranges.
+    float x = (float)(val - stage_min) / (float)(stage_max - stage_min); // 0.0f to 1.0f
+    return (uint32_t)(PWM_MAX_VAL * (x * x));
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
+	adc_val = HAL_ADC_GetValue(hadc); // (2^12)-1==4065 possible values
+	if ((adc_val >= ADC_MIN) && (adc_val < PWM_LOWER_BOUND)) { // low bright
+		duty_red = PWM_duty_correction(adc_val, ADC_MIN, PWM_LOWER_BOUND);
+		//set LED1 (red) to proper percentage between 0 and 999 that is percentage of the first 1/3 of max voltage
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, duty_red);
 		//set other LEDs to 0
 		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
 		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0);
 	}
-	if ((adc_val > PWM_LOWER_BOUND) & (adc_val < PWM_UPPER_BOUND)) { //medium bright
+	else if ((adc_val >= PWM_LOWER_BOUND) && (adc_val < PWM_UPPER_BOUND)) { //medium bright
+		duty_green = PWM_duty_correction(adc_val, PWM_LOWER_BOUND, PWM_UPPER_BOUND);
 		//set LED1 to max
-		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, PWM_MAX);
-		//set LED2 (green) to proper percentage between 0 and 999 that is percentage of the middle 1/3 of brightness max
-		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, duty2);
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, PWM_MAX_VAL);
+		//set LED2 (green) to proper percentage between 0 and 999 that is percentage of the middle 1/3 of max voltage
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, duty_green);
 		//set LED3 to zero
 		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0);
 	}
-	if (adc_val > PWM_UPPER_BOUND) { // high bright
+	else if (adc_val >= PWM_UPPER_BOUND) { // high bright
+		duty_blue = PWM_duty_correction(adc_val, PWM_UPPER_BOUND, ADC_MAX);
 		//set LED1 and 2 to max
-		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, PWM_MAX);
-		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, PWM_MAX);
-		//set LED3 (blue) to proper percentage between 0 and 999 that is percentage of the final 1/3 of brightness max
-		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, duty3);
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, PWM_MAX_VAL);
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, PWM_MAX_VAL);
+		//set LED3 (blue) to proper percentage between 0 and 999 that is percentage of the final 1/3 of max voltage
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, duty_blue);
+	}
+	else {
+		// If above code doesn't cover all cases (It should cover all cases that aren't wonky) just turn LEDs off.
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0);
+	}
+
+	if (TESTING == 1) {
+		if (dac_val < ADC_MAX) {
+			dac_val = dac_val + 10;
+		}
+		else {
+			dac_val = ADC_MIN;
+		}
+		HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_val);
 	}
 }
 
-uint32_t PWM_duty_correction(uint32_t val, uint32_t stage_min, uint32_t stage_max) {
-	// Gamma correction
-    float x = (float)(val - stage_min) / (float)(stage_max - stage_min); // 0.0f to 1.0f
-    return (uint32_t)(PWM_MAX * (xDACoutput VREF
-    		DOR
-    		4096
-    		-------------- * x));
-}
 /* USER CODE END 4 */
 
 /**
