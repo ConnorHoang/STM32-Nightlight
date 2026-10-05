@@ -15,7 +15,6 @@ HAL source to find these is OK, but verify against the reference manual. You may
 this as a link to another .md file from your README.md
 ● Testing: your self-test results and any other tests you ran, with data
 ● Obstacles: we’re expecting you to point out one major obstacle and how you solved it.
-Hint hint, you’re only allowed one breadboard
 
 
 
@@ -28,12 +27,9 @@ ___System_diagram____
 | Peripheral | Register | Base Address | Offset | Relevant Bit(s) | Value | Explanation |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | ADC1 | `ADC_CCR` | `0x40012304` | `+0x04` | `ADCPRE[1:0]` (Bits 17:16) | `0b01` | Divides `PCLK2` (90 MHz) by 4 to run the ADC clock at 22.5 MHz. |
-| ADC1 | `ADC1_CR1` | `0x40012004` | `+0x04` | `RES[1:0]` (Bits 25:24) | `0b00` | Sets 12-bit resolution (0–4095 range; takes 12 ADCCLK cycles + sampling time). |
-| ADC1 | `ADC1_CR1` | `0x40012004` | `+0x04` | `SCAN` (Bit 8) | `0` | Disables scan mode since only a single channel (`IN1`) is converted. |
 | ADC1 | `ADC1_CR1` | `0x40012004` | `+0x04` | `EOCIE` (Bit 5) | `1` | Enables interrupt generation when the End of Conversion (`EOC`) flag is set. |
 | ADC1 | `ADC1_CR2` | `0x40012008` | `+0x08` | `EXTEN[1:0]` (Bits 29:28) | `0b01` | Enables hardware trigger detection on the rising edge of the timer trigger. |
 | ADC1 | `ADC1_CR2` | `0x40012008` | `+0x08` | `EXTSEL[3:0]` (Bits 27:24) | `0b0110` | Selects `TIM2_TRGO` event to trigger regular channel conversions. |
-| ADC1 | `ADC1_CR2` | `0x40012008` | `+0x08` | `ALIGN` (Bit 11) | `0` | Right-aligns the 12-bit result in bits `[11:0]` of `ADC1_DR`. |
 | ADC1 | `ADC1_CR2` | `0x40012008` | `+0x08` | `EOCS` (Bit 10) | `1` | Sets `EOC` bit in `ADC1_SR` at the end of each individual regular conversion. |
 | ADC1 | `ADC1_CR2` | `0x40012008` | `+0x08` | `CONT` (Bit 1) | `0` | Single conversion mode; ADC waits for each 100 Hz `TIM2_TRGO` pulse. |
 | ADC1 | `ADC1_CR2` | `0x40012008` | `+0x08` | `ADON` (Bit 0) | `1` | Powers on and enables the ADC1 peripheral. |
@@ -49,36 +45,35 @@ ___System_diagram____
 | TIM3 | `TIM3_CR1` | `0x40000400` | `+0x00` | `CEN` (Bit 0) | `1` | Enables the TIM3 counter. |
 | TIM3 | `TIM3_PSC` | `0x40000428` | `+0x28` | `PSC[15:0]` (Bits 15:0) | `89` | Divides the 90 MHz APB1 timer clock by `89 + 1 = 90` to yield a 1 MHz counter clock. |
 | TIM3 | `TIM3_ARR` | `0x4000042C` | `+0x2C` | `ARR[15:0]` (Bits 15:0) | `999` | Rolls over every `999 + 1 = 1000` ticks (`1 MHz / 1000 = 1 kHz` PWM frequency with 1000 steps). |
-| TIM3 | `TIM3_CCMR1` | `0x40000418` | `+0x18` | `OC1M[2:0]` (Bits 6:4), `OC2M[2:0]` (Bits 14:12) | `0b110` | Sets Channels 1 (`PA6`) and 2 (`PA7`) to PWM Mode 1 (output HIGH while `CNT < CCRx`). |
-| TIM3 | `TIM3_CCMR2` | `0x4000041C` | `+0x1C` | `OC3M[2:0]` (Bits 6:4) | `0b110` | Sets Channel 3 (`PB0`) to PWM Mode 1 (output HIGH while `CNT < CCR3`). |
+| TIM3 | `TIM3_CCMR1` | `0x40000418` | `+0x18` | `OC1M[2:0]` (Bits 6:4), `OC2M[2:0]` (Bits 14:12) | `0b110` | Sets Channels 1 and 2 to PWM Mode 1 (output HIGH while `CNT < CCRx`). |
+| TIM3 | `TIM3_CCMR2` | `0x4000041C` | `+0x1C` | `OC3M[2:0]` (Bits 6:4) | `0b110` | Sets Channel 3 to PWM Mode 1 (output HIGH while `CNT < CCR3`). |
 | TIM3 | `TIM3_CCER` | `0x40000420` | `+0x20` | `CC1E/2E/3E` (Bits 0, 4, 8), `CC1P/2P/3P` (Bits 1, 5, 9) | `CCxE = 1`, `CCxP = 0` | Enables PWM output on pins `PA6`, `PA7`, and `PB0` and sets active polarity HIGH. |
 | TIM3 | `TIM3_CCR1` | `0x40000434` | `+0x34` | `CCR1[15:0]` (Bits 15:0) | `0`–`999` | Sets the active PWM duty cycle threshold for Channel 1 (Red LED on `PA6`). |
 | TIM3 | `TIM3_CCR2` | `0x40000438` | `+0x38` | `CCR2[15:0]` (Bits 15:0) | `0`–`999` | Sets the active PWM duty cycle threshold for Channel 2 (Green LED on `PA7`). |
 | TIM3 | `TIM3_CCR3` | `0x4000043C` | `+0x3C` | `CCR3[15:0]` (Bits 15:0) | `0`–`999` | Sets the active PWM duty cycle threshold for Channel 3 (Blue LED on `PB0`). |
 
 ## Circuit design
-The First step was circuit design. 
-* The goal of the circuit is to take the brightness information from the photoresistor and maximize resolution by creating a range that spans all ADC values. This is achieved by taking the experimentally derived photoresistor brightness response information described in "Photoresistor characterization" which gave a minimum of 0Ohms and a maximum of XOhms. I knew the STM32 was capable of outputting 5V and the ADC measured a maximum of 3.3V relative to ground. As such, I decided to use a voltage divider with R1 being XOhms and R2 being the photoresistor (see diagram or photo ***build diagram and take photo***). Through this method, the maximum value of the voltage through the ADC (connected from the center of the voltage divider to ground) is 3.3V.
+The First step was circuit design. The goal of the circuit is to take the brightness information from the photoresistor and maximize resolution by creating a range that spans all ADC values. This is achieved by taking the experimentally derived photoresistor brightness response information described in "Photoresistor characterization" which gave a minimum of 0Ohms and a maximum of XOhms. I knew the STM32 was capable of outputting 3.3V and the ADC measured a maximum of 3.3V relative to ground. As such, I decided to use a voltage divider with R1 being 5 KOhms and R2 being the photoresistor. as the voltage divider had better resolution when the resistors had similar values, allowing for more resolution at the brighter light levels. <!-- (see diagram or photo ***build diagram and take photo***). Through this method, the maximum value of the voltage through the ADC (connected from the center of the voltage divider to ground) is 3.3V. -->
 
 ## Sensor Characterization
-As the photoresistor on hand did not have a datasheet available, part of this project was characterizing the photoresistor's behavior. This was done by creating ___ different light levels between pitch black and full daylight to test the photoresistor's output. This data is shown in table ___ with visuals stored _____. -> chose based upon experimental results
+As the photoresistor on hand did not have a datasheet available, part of this project was characterizing the photoresistor's behavior. As no luminosity sensor was available, two methods were tried to determine ranges of operation. The first involved taking a phone light and testing 8 values at 2 inch increments. From 14 inches to 0 inches the corresponding resistance values were: 3.7 kΩ, 2.9 kΩ, 2.2 kΩ, 1.6 kΩ, 1.1 kΩ, 700 Ω, 400 Ω, 0 Ω<!--as shown in figure ____-->. Further qualitative measurements were taken at 6 different brightness levels between full daylight and pitch black as shown in figure ____. Both quantitative and qualitative experimental results demonstrate non-linearity. As the quantitative measurements align reasonably well into a negative, linear fit with a logarithmic scale, and the qualitative results were non-linear in a similar trend, it is decided that the logorithimic extrapolation is a reasonable relationship across the entire photoresistor range.
+<!--This data is shown in table ___ with visuals stored _____. -> chose based upon experimental results
 * From this information we learned the phptoresistor behaves linearly, and through the use of a voltage divider described in "Circuit Design," was appropriately scaled to fit the range of accepted ADC values on the STM32.
-* From this information I learned the photoresistor behaves non-linearly. To address this, I fitted a __(probably quadratic)___ to the data. Through the use of a voltage divider described in "Circuit Design," was appropriately scaled to fit the range of accepted ADC values on the STM32. Afterwards, the fitted ____(probably quadratic)___ is inverted in software to acheive a linear behavior as ambient luminosity increases.
+* From this information I learned the photoresistor behaves non-linearly. To address this, I fitted a __(probably quadratic)___ to the data. Through the use of a voltage divider described in "Circuit Design," was appropriately scaled to fit the range of accepted ADC values on the STM32. Afterwards, the fitted ____(probably quadratic)___ is inverted in software to acheive a linear behavior as ambient luminosity increases. -->
 
 ## LED Design
 The first design consideration was how to smoothly vary the brightness of each LED. This project uses PWM to do so, as increasing the rate at which a PWM duty cycle flickers the light makes it appear to the human eye as though the LED is getting brighter. To better distinguish where in the range the photoresistor is, three LEDs are used to cover the brightest, middling, and darkest ranges that the photoresistor covers. Given this seperation, 999 steps between 0% and 100% duty cycle was arbitrarily chosen as reasonable to smoothly transition. Visual inspection validates this number of steps as sufficient. As the ambient light gets darker the colors light up in red, green, then blue order to match the phrasing of RGB.
-* To dynamically change the brightness of each LED, PWM was used on TIM3 with each LED getting a dedicated channel on the timer. An arbitrary 1000Hz timer frequency was decided. Knowing TIM3 resides on APB1, we know from the earlier clock configuration that the base clock speed is 90MHz. As we are using PWM, we also know the number of positions between 0% and 100% of the duty cycle is set by how large the ARR value is. In this case, 999 steps was arbitrarily deemed a smooth enough transition. Plugging those values into the timer formula means my PSC value needed to be 89 to resolve the previously mentioned values. The colors light up in red, green, blue order to match the phrasing of RGB.
+PWM used TIM3 with each LED getting a dedicated channel on the timer. An arbitrary 1000Hz timer frequency was decided to be sufficient. Knowing TIM3 resides on APB1, we know from the earlier clock configuration that the base clock speed is 90MHz. As we are using PWM, we also know the number of positions between 0% and 100% of the duty cycle is set by how large the ARR value is. In this case, 999 steps was arbitrarily deemed a smooth enough transition. Plugging those values into the timer formula means my PSC value needed to be 89 to resolve the previously mentioned values.
 
-ADC Notes
-With the LED architecture decided, 
-* As part of using no blocking, I decided to use interrupts to utilize my ADC. Of the options provided, I decided to use the interrupt that triggered whenever a regular conversion finished. The output for this interrupt exists in the register for EOC, with the enable for this option existing in EOCIE for interrupt enable. As the ADC is simply used for a passive sampler, there is no need to use an injected group for any injected conversions. Additionally, the ADC is started with HAL_ADC_Start_IT(&HADC1) to initialize it into interrupt mode, with the address of ADC1 which is what is reading the analog sensor. According to the data sheet, the total unadjusted error in ADC accuracy at a frequency of 30MHz is typically +-2, with a max of +-5. For the purposes of this project, this variation from truth is considered acceptable, and not worth correcting for (***Check that this is the right frequency used in project, and if not, either say "its close enough" or interpolate with other frequency inaccuracies***).
+## ADC Notes
+As part of using no blocking, I decided to use interrupts to utilize my ADC. Of the options provided, I decided to use the interrupt that triggered whenever a regular conversion finished. The output for this interrupt exists in the register for EOC, with the enable for this option existing in EOCIE for interrupt enable. As the ADC is simply used for a passive sampler, there is no need to use an injected group for any injected conversions. Additionally, the ADC is started with HAL_ADC_Start_IT(&HADC1) to initialize it into interrupt mode, with the address of ADC1 which is what is reading the analog sensor. According to the data sheet, the total unadjusted error in ADC accuracy at a frequency of 30MHz is typically +-2, with a max of +-5. For the purposes of this project, this variation from truth is considered acceptable, and not worth correcting for <!--(***Check that this is the right frequency used in project, and if not, either say "its close enough" or interpolate with other frequency inaccuracies***).-->
 
 
 ## DAC Notes
-* Reviewing the DAC shows a DAC_OUT minimum of 0.2V and a DAC_OUT maximum of V_DDA-0.2V. This the DAC is not good for testing in the first 0.2 of either edge, so for all testing we only used voltage values inside the safe range.
+Reviewing the DAC shows a DAC_OUT minimum of 0.2V and a DAC_OUT maximum of V_DDA-0.2V. This the DAC is not good for testing in the first 0.2 of either edge, so for all testing we only used voltage values inside the safe range.
 
 ## ADC Callback
-* The ADC callback is designed to read the value stored in the ADC register, use the value to determine where in the range and thus what LED region it should be setting, and then pass in the proper lighting instructions to all three LEDs. The specified ranges split the valid range ADC values into thirds by taking the maximum and minimum ADC values and splitting that into thirds.
+The ADC callback is designed to read the value stored in the ADC register, use the value to determine where in the range and thus what LED region it should be setting, and then pass in the proper lighting instructions to all three LEDs. The specified ranges split the valid range ADC values into thirds by taking the maximum and minimum ADC values and splitting that into thirds.
 
 
 
