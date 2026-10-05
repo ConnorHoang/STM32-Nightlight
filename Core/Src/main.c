@@ -42,12 +42,12 @@
 
 #define ADC_MIN		500U ///////// check this val
 #define ADC_MAX		3500U /////
-#define STAGE_SPAN      ((ADC_MAX - ADC_MIN) / 3U) // 1000 counts per third
-#define PWM_LOWER_BOUND (ADC_MIN + STAGE_SPAN)          // 1500
-#define PWM_UPPER_BOUND (ADC_MIN + 2U * STAGE_SPAN)     // 2500
+#define STAGE_SPAN      ((ADC_MAX - ADC_MIN) / 3U)
+#define PWM_LOWER_BOUND (ADC_MIN + STAGE_SPAN)
+#define PWM_UPPER_BOUND (ADC_MIN + 2U * STAGE_SPAN)
 #define PWM_MAX_VAL		999U
 
-#define TESTING 1 /// If 1, use DAC. If 0, assume photoresistor is in circuit
+#define TESTING 0 /// If 1, use DAC. If 0, assume photoresistor is in circuit
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
