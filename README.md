@@ -22,7 +22,7 @@ this as a link to another .md file from your README.md
 This project utiilizes an STM32 Nucleo F446RE development board to vary LED output using an external photoresistor. Testing through use of an internal DAC is also implemented. As ambient light decreases a red light will increase in brightness until it is fully saturated having covered roughly a third of the range of the photoresistor. A green and blue LED cover the second and third parts of the range respectively. As an additional stipulation, the project is devoid of polling and other blocking calls. All interaction is event and interrupt driven.
 
 ## System Overview <!--//////-->
-___System_diagram____
+System diagram available in 'media' folder.
 | Peripheral | Register | Base Address | Offset | Relevant Bit(s) | Value | RM0390 Section | Explanation |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | ADC1 | `ADC_CCR` | `0x40012304` | `+0x04` | `ADCPRE[1:0]` (Bits 17:16) | `0b01` | Sec. 13.13.18 (p. 394) | Divides `PCLK2` (90 MHz) by 4 to run the ADC clock at 22.5 MHz. |
