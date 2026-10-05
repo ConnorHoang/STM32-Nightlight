@@ -1,4 +1,4 @@
-Your README must include these fields, organized however you see fit:
+<!--Your README must include these fields, organized however you see fit:
 ● Overview: what it does, your breadboard prototype, and your demo video
 ● Circuit diagram: a schematic, your component values, and the calculations behind them
 ● Sensor characterization: your data, your plot, and what the relationship tells you
@@ -15,13 +15,13 @@ HAL source to find these is OK, but verify against the reference manual. You may
 this as a link to another .md file from your README.md
 ● Testing: your self-test results and any other tests you ran, with data
 ● Obstacles: we’re expecting you to point out one major obstacle and how you solved it.
-
+-->
 
 
 ## Overview
 This project utiilizes an STM32 Nucleo F446RE development board to vary LED output using an external photoresistor. Testing through use of an internal DAC is also implemented. As ambient light decreases a red light will increase in brightness until it is fully saturated having covered roughly a third of the range of the photoresistor. A green and blue LED cover the second and third parts of the range respectively. As an additional stipulation, the project is devoid of polling and other blocking calls. All interaction is event and interrupt driven.
 
-## System Overview //////
+## System Overview <!--//////-->
 ___System_diagram____
 
 | Peripheral | Register | Base Address | Offset | Relevant Bit(s) | Value | Explanation |
@@ -68,15 +68,14 @@ PWM used TIM3 with each LED getting a dedicated channel on the timer. An arbitra
 ## ADC Notes
 As part of using no blocking, I decided to use interrupts to utilize my ADC. Of the options provided, I decided to use the interrupt that triggered whenever a regular conversion finished. The output for this interrupt exists in the register for EOC, with the enable for this option existing in EOCIE for interrupt enable. As the ADC is simply used for a passive sampler, there is no need to use an injected group for any injected conversions. Additionally, the ADC is started with HAL_ADC_Start_IT(&HADC1) to initialize it into interrupt mode, with the address of ADC1 which is what is reading the analog sensor. According to the data sheet, the total unadjusted error in ADC accuracy at a frequency of 30MHz is typically +-2, with a max of +-5. For the purposes of this project, this variation from truth is considered acceptable, and not worth correcting for <!--(***Check that this is the right frequency used in project, and if not, either say "its close enough" or interpolate with other frequency inaccuracies***).-->
 
-
 ## DAC Notes
-Reviewing the DAC shows a DAC_OUT minimum of 0.2V and a DAC_OUT maximum of V_DDA-0.2V. This the DAC is not good for testing in the first 0.2 of either edge, so for all testing we only used voltage values inside the safe range.
+Reviewing the DAC shows a DAC_OUT minimum of 0.2V and a DAC_OUT maximum of V_DDA-0.2V. This the DAC is not good for testing in the first 0.2 of either edge, so for all testing we only used voltage values inside the safe range. For testing, within the ADC callback, is a line of software that increments 'dac_val' by 10. This way, as the ADC callback occurred at a repeated frequency, the 'dac_val' can be used to increase the output of the DAC to simulate the photoresistor being exposed to a darker environment. There is also a check to loop the 'dac_val' back to a minimum if it reaches the maximum value the ADC can handle.
 
 ## ADC Callback
 The ADC callback is designed to read the value stored in the ADC register, use the value to determine where in the range and thus what LED region it should be setting, and then pass in the proper lighting instructions to all three LEDs. The specified ranges split the valid range ADC values into thirds by taking the maximum and minimum ADC values and splitting that into thirds.
 
-
-
+## Challenge
+One major obstacle faced during this development process was the selection of resistor to pair with the photoresistor in the voltage divider. While I initially assumed I could choose a somewhat arbitrary resistor and scale the values in software, I found that selecting a more reasonable R1 resistor value made the photoresistor readouts to the ADC much easier to handle. I presume this is due to a phenomenon where having too large of a resistor collapses the voltage variation from the voltage divider to much smaller increments as the R1 resistor is fully drowning out the photoresistor.
 
 ## Datasheets
 Red LED: https://www.digikey.com/en/products/detail/kingbright/WP7113ID/754-1264-ND/1747663
